@@ -66,3 +66,6 @@ const deleteRow = async (table, id) => {
   }
   return { error };
 };
+
+return { ...data, loading, error, reload, insertRow, updateRow, deleteRow };
+}
