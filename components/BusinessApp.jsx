@@ -30,14 +30,14 @@ export default function BusinessApp({ userEmail, userId }) {
   /* -------- helpers -------- */
   const productName = (id) => (products.find((p) => p.id === id) || {}).name || '—';
   const avgBuyPrice = (id) => {
-    const rel = purchases.filter((p) => p.product_id === id);
+    const rel = purchases?.filter((p) => p.product_id === id) ?? [];
     const q = rel.reduce((s, p) => s + Number(p.qty || 0), 0);
     const c = rel.reduce((s, p) => s + Number(p.total_cost || 0), 0);
     return q > 0 ? c / q : 0;
   };
   const stockQty = (id) => {
-    const bought = purchases.filter((p) => p.product_id === id).reduce((s, p) => s + Number(p.qty || 0), 0);
-    const sold = sales.filter((s) => s.product_id === id).reduce((s, x) => s + Number(x.qty || 0), 0);
+    const bought = purchases?.filter((p) => p.product_id === id).reduce((s, p) => s + Number(p.qty || 0), 0) ?? [];
+    const sold = sales?.filter((s) => s.product_id === id).reduce((s, x) => s + Number(x.qty || 0), 0) ?? [];
     return bought - sold;
   };
   const addProduct = async (name) => {
@@ -48,11 +48,11 @@ export default function BusinessApp({ userEmail, userId }) {
   /* -------- Akaunti za Fedha -------- */
   const accountName = (id) => (accounts.find((a) => a.id === id) || {}).name || '—';
   const accountBalance = (acc) => {
-    const inSales = sales.filter((s) => s.account_id === acc.id && s.payment_type === 'Taslimu').reduce((s, x) => s + Number(x.total_sale || 0), 0);
-    const inDebtPay = debts.filter((d) => d.account_id === acc.id).reduce((s, d) => s + Number(d.paid_amount || 0), 0);
-    const outPurchases = purchases.filter((p) => p.account_id === acc.id).reduce((s, p) => s + Number(p.total_cost || 0), 0);
-    const outBiz = biz_expenses.filter((e) => e.account_id === acc.id).reduce((s, e) => s + Number(e.amount || 0), 0);
-    const outPers = personal_expenses.filter((e) => e.account_id === acc.id).reduce((s, e) => s + Number(e.amount || 0), 0);
+    const inSales = sales?.filter((s) => s.account_id === acc.id && s.payment_type === 'Taslimu').reduce((s, x) => s + Number(x.total_sale || 0), 0) ?? [];
+    const inDebtPay = debts?.filter((d) => d.account_id === acc.id).reduce((s, d) => s + Number(d.paid_amount || 0), 0) ?? [];
+    const outPurchases = purchases?.filter((p) => p.account_id === acc.id).reduce((s, p) => s + Number(p.total_cost || 0), 0) ?? [];
+    const outBiz = biz_expenses?.filter((e) => e.account_id === acc.id).reduce((s, e) => s + Number(e.amount || 0), 0) ?? [];
+    const outPers = personal_expenses?.filter((e) => e.account_id === acc.id).reduce((s, e) => s + Number(e.amount || 0), 0) ?? [];
     const moneyIn = inSales + inDebtPay;
     const moneyOut = outPurchases + outBiz + outPers;
     return { balance: Number(acc.opening_balance || 0) + moneyIn - moneyOut, moneyIn, moneyOut };
@@ -226,30 +226,30 @@ export default function BusinessApp({ userEmail, userId }) {
 
   /* -------- dashboard aggregates -------- */
   const curMk = monthKey(todayStr());
-  const salesThisMonth = sales.filter((s) => monthKey(s.date) === curMk);
+  const salesThisMonth = sales?.filter((s) => monthKey(s.date) === curMk) ?? [];
   const mauzoMwezi = salesThisMonth.reduce((s, x) => s + Number(x.total_sale || 0), 0);
   const faidaMwezi = salesThisMonth.reduce((s, x) => s + Number(x.profit || 0), 0);
-  const madeniSasa = debts.filter((d) => d.status !== 'Imelipwa').reduce((s, d) => s + Number(d.balance || 0), 0);
+  const madeniSasa = debts?.filter((d) => d.status !== 'Imelipwa').reduce((s, d) => s + Number(d.balance || 0), 0) ?? [];
   const idadiWateja = customerStats.length;
   const lastMkTop = addMonths(todayStr(), -1);
-  const mauzoMwezLiopita = sales.filter((s) => monthKey(s.date) === lastMkTop).reduce((s, x) => s + Number(x.total_sale || 0), 0);
-  const fedhaZilizopo = accounts.filter((a) => a.status !== 'Imefungwa').reduce((s, a) => s + accountBalance(a).balance, 0);
+  const mauzoMwezLiopita = sales?.filter((s) => monthKey(s.date) === lastMkTop).reduce((s, x) => s + Number(x.total_sale || 0), 0) ?? [];
+  const fedhaZilizopo = accounts?.filter((a) => a.status !== 'Imefungwa').reduce((s, a) => s + accountBalance(a).balance, 0) ?? [];
 
   const productSummary = products.map((p) => {
-    const rel = sales.filter((s) => s.product_id === p.id);
+    const rel = sales?.filter((s) => s.product_id === p.id) ?? [];
     return {
       name: p.name,
       kg: rel.reduce((s, x) => s + Number(x.qty || 0), 0),
       mauzo: rel.reduce((s, x) => s + Number(x.total_sale || 0), 0),
       faida: rel.reduce((s, x) => s + Number(x.profit || 0), 0),
     };
-  }).filter((p) => p.kg > 0 || p.mauzo > 0);
+  })?.filter((p) => p.kg > 0 || p.mauzo > ?? [] 0);
 
   const trend = useMemo(() => {
     const arr = [];
     for (let i = 5; i >= 0; i--) {
       const mk = addMonths(todayStr(), -i);
-      const rel = sales.filter((s) => monthKey(s.date) === mk);
+      const rel = sales?.filter((s) => monthKey(s.date) === mk) ?? [];
       arr.push({
         month: monthLabel(mk),
         Mauzo: rel.reduce((s, x) => s + Number(x.total_sale || 0), 0),
@@ -261,14 +261,14 @@ export default function BusinessApp({ userEmail, userId }) {
 
   const expenseBreakdown = useMemo(() => {
     const yr = todayStr().slice(0, 4);
-    const gManunuzi = purchases.filter((p) => p.date?.startsWith(yr)).reduce((s, p) => s + Number(p.total_cost || 0), 0);
-    const gBiashara = biz_expenses.filter((p) => p.date?.startsWith(yr)).reduce((s, p) => s + Number(p.amount || 0), 0);
-    const gBinafsi = personal_expenses.filter((p) => p.date?.startsWith(yr)).reduce((s, p) => s + Number(p.amount || 0), 0);
+    const gManunuzi = purchases?.filter((p) => p.date?.startsWith(yr)).reduce((s, p) => s + Number(p.total_cost || 0), 0) ?? [];
+    const gBiashara = biz_expenses?.filter((p) => p.date?.startsWith(yr)).reduce((s, p) => s + Number(p.amount || 0), 0) ?? [];
+    const gBinafsi = personal_expenses?.filter((p) => p.date?.startsWith(yr)).reduce((s, p) => s + Number(p.amount || 0), 0) ?? [];
     return [
       { name: 'Manunuzi', value: gManunuzi },
       { name: 'Gharama Biashara', value: gBiashara },
       { name: 'Matumizi Binafsi', value: gBinafsi },
-    ].filter((x) => x.value > 0);
+    ]?.filter((x) => x.value > 0) ?? [];
   }, [purchases, biz_expenses, personal_expenses]);
 
   const logout = async () => {
@@ -701,7 +701,7 @@ function MadeniTab({ debts, accounts, addManualDebt, payDebt, accountName }) {
   };
 
   const sorted = [...debts].sort((a, b) => (a.status === 'Imelipwa') - (b.status === 'Imelipwa') || (b.date || '').localeCompare(a.date || ''));
-  const openDebts = debts.filter((d) => d.status !== 'Imelipwa');
+  const openDebts = debts?.filter((d) => d.status !== 'Imelipwa') ?? [];
   const totalOpen = openDebts.reduce((s, d) => s + Number(d.balance || 0), 0);
 
   return (
@@ -808,7 +808,7 @@ function AkauntiTab({ accounts, accountBalance, saveAccount, deleteAccount }) {
   const submit = async () => { await saveAccount(f, editId); setOpen(false); };
   const del = (id) => { if (confirm('Futa akaunti hii? Miamala iliyounganishwa nayo haitafutwa.')) deleteAccount(id); };
 
-  const totalBalance = accounts.filter((a) => a.status !== 'Imefungwa').reduce((s, a) => s + accountBalance(a).balance, 0);
+  const totalBalance = accounts?.filter((a) => a.status !== 'Imefungwa').reduce((s, a) => s + accountBalance(a).balance, 0) ?? [];
 
   return (
     <div className="space-y-4">
