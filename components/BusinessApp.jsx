@@ -243,7 +243,7 @@ export default function BusinessApp({ userEmail, userId }) {
       mauzo: rel.reduce((s, x) => s + Number(x.total_sale || 0), 0),
       faida: rel.reduce((s, x) => s + Number(x.profit || 0), 0),
     };
-  })?.filter((p) => p.kg > 0 || p.mauzo > ?? [] 0);
+  })?.filter((p) => p.kg > 0 || p.mauzo > 0) ?? [];
 
   const trend = useMemo(() => {
     const arr = [];
