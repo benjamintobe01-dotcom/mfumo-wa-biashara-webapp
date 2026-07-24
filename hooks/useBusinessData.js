@@ -56,8 +56,13 @@ export function useBusinessData(userId) {
     return { data: d, error };
   };
 
- const deleteRow = async (table, id) => {
+const deleteRow = async (table, id) => {
   const { error } = await supabase.from(table).delete().eq('id', id);
-  if (!error) setData((prev) => ({ ...prev, [table]: prev?.[table]?.filter((r) => r.id !== id) ?? [] }));
+  if (!error) {
+    setData((prev) => ({
+      ...prev,
+      [table]: prev?.[table]?.filter((r) => r.id !== id) ?? []
+    }));
+  }
   return { error };
 };
