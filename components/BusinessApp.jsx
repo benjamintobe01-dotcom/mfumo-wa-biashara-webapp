@@ -8,7 +8,7 @@ import {
 import {
   LayoutDashboard, ShoppingCart, ShoppingBag, Users, Wallet, Package,
   Plus, Trash2, Pencil, X, Check, TrendingUp, TrendingDown, Minus,
-  Menu, ClipboardList, LogOut,
+  Menu, ClipboardList, LogOut, CreditCard,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useBusinessData } from '@/hooks/useBusinessData';
@@ -22,7 +22,7 @@ import {
 export default function BusinessApp({ userEmail, userId }) {
   const bd = useBusinessData(userId);
   const {
-    products, sales, purchases, biz_expenses, personal_expenses, debts, customer_profiles, loading,
+    products, sales, purchases, biz_expenses, personal_expenses, debts, customer_profiles, accounts, loading,
   } = bd;
   const [tab, setTab] = useState('dashboard');
   const [moreOpen, setMoreOpen] = useState(false);
@@ -45,6 +45,29 @@ export default function BusinessApp({ userEmail, userId }) {
     return data;
   };
 
+  /* -------- Akaunti za Fedha -------- */
+  const accountName = (id) => (accounts.find((a) => a.id === id) || {}).name || '—';
+  const accountBalance = (acc) => {
+    const inSales = sales.filter((s) => s.account_id === acc.id && s.payment_type === 'Taslimu').reduce((s, x) => s + Number(x.total_sale || 0), 0);
+    const inDebtPay = debts.filter((d) => d.account_id === acc.id).reduce((s, d) => s + Number(d.paid_amount || 0), 0);
+    const outPurchases = purchases.filter((p) => p.account_id === acc.id).reduce((s, p) => s + Number(p.total_cost || 0), 0);
+    const outBiz = biz_expenses.filter((e) => e.account_id === acc.id).reduce((s, e) => s + Number(e.amount || 0), 0);
+    const outPers = personal_expenses.filter((e) => e.account_id === acc.id).reduce((s, e) => s + Number(e.amount || 0), 0);
+    const moneyIn = inSales + inDebtPay;
+    const moneyOut = outPurchases + outBiz + outPers;
+    return { balance: Number(acc.opening_balance || 0) + moneyIn - moneyOut, moneyIn, moneyOut };
+  };
+  const saveAccount = async (form, editId) => {
+    if (!form.name.trim()) return;
+    const row = {
+      name: form.name.trim(), type: form.type, account_number: form.accountNumber,
+      lipa_namba: form.lipaNamba, opening_balance: Number(form.openingBalance || 0), status: form.status, notes: form.notes,
+    };
+    if (editId) await bd.updateRow('accounts', editId, row);
+    else await bd.insertRow('accounts', row);
+  };
+  const deleteAccount = (id) => bd.deleteRow('accounts', id);
+
   /* -------- Mauzo (sales) with debt sync -------- */
   const saveSale = async (form, editId) => {
     let productId = form.productId;
@@ -60,6 +83,7 @@ export default function BusinessApp({ userEmail, userId }) {
     const row = {
       date: form.date, customer: form.customer || 'Mteja', product_id: productId, qty,
       sell_price: sellPrice, total_sale, buy_price: buyPrice, cost, profit, payment_type: form.paymentType,
+      account_id: form.paymentType === 'Taslimu' ? (form.accountId || null) : null,
     };
     let saleRow;
     if (editId) {
@@ -108,7 +132,7 @@ export default function BusinessApp({ userEmail, userId }) {
     const qty = Number(form.qty), buyPrice = Number(form.buyPrice);
     const row = {
       date: form.date, product_id: productId, qty, buy_price: buyPrice,
-      total_cost: qty * buyPrice, supplier: form.supplier, notes: form.notes,
+      total_cost: qty * buyPrice, supplier: form.supplier, notes: form.notes, account_id: form.accountId || null,
     };
     if (editId) await bd.updateRow('purchases', editId, row);
     else await bd.insertRow('purchases', row);
@@ -120,11 +144,11 @@ export default function BusinessApp({ userEmail, userId }) {
     total_debt: Number(form.totalDebt), paid_amount: 0, balance: Number(form.totalDebt),
     status: 'Wazi', notes: form.notes,
   });
-  const payDebt = async (d, amt) => {
+  const payDebt = async (d, amt, accountId) => {
     const paid = Number(d.paid_amount || 0) + amt;
     const balance = Math.max(Number(d.total_debt) - paid, 0);
     const status = balance <= 0 ? 'Imelipwa' : 'Sehemu';
-    await bd.updateRow('debts', d.id, { paid_amount: paid, balance, status, payment_date: todayStr() });
+    await bd.updateRow('debts', d.id, { paid_amount: paid, balance, status, payment_date: todayStr(), account_id: accountId || d.account_id || null });
   };
 
   /* -------- Wateja profiles -------- */
@@ -209,6 +233,7 @@ export default function BusinessApp({ userEmail, userId }) {
   const idadiWateja = customerStats.length;
   const lastMkTop = addMonths(todayStr(), -1);
   const mauzoMwezLiopita = sales.filter((s) => monthKey(s.date) === lastMkTop).reduce((s, x) => s + Number(x.total_sale || 0), 0);
+  const fedhaZilizopo = accounts.filter((a) => a.status !== 'Imefungwa').reduce((s, a) => s + accountBalance(a).balance, 0);
 
   const productSummary = products.map((p) => {
     const rel = sales.filter((s) => s.product_id === p.id);
@@ -269,6 +294,7 @@ export default function BusinessApp({ userEmail, userId }) {
     { id: 'bidhaa', label: 'Bidhaa', icon: Package },
     { id: 'wateja', label: 'Wateja', icon: Users },
     { id: 'matumizi', label: 'Matumizi', icon: Wallet },
+    { id: 'akaunti', label: 'Akaunti', icon: CreditCard },
     { id: 'muhtasari', label: 'Muhtasari', icon: ClipboardList },
   ];
   const isMore = MORE.some((m) => m.id === tab);
@@ -290,16 +316,16 @@ export default function BusinessApp({ userEmail, userId }) {
 
       <div className="max-w-md mx-auto px-4 -mt-1 pt-4">
         {tab === 'dashboard' && (
-          <Dashboard {...{ mauzoMwezi, faidaMwezi, madeniSasa, idadiWateja, productSummary, trend, expenseBreakdown, customerStats, insights }} />
+          <Dashboard {...{ mauzoMwezi, faidaMwezi, madeniSasa, idadiWateja, productSummary, trend, expenseBreakdown, customerStats, insights, fedhaZilizopo }} />
         )}
         {tab === 'mauzo' && (
-          <MauzoTab {...{ sales, products, saveSale, deleteSale, productName, avgBuyPrice }} />
+          <MauzoTab {...{ sales, products, accounts, saveSale, deleteSale, productName, avgBuyPrice }} />
         )}
         {tab === 'manunuzi' && (
-          <ManunuziTab {...{ purchases, products, savePurchase, deletePurchase: (id) => bd.deleteRow('purchases', id), productName }} />
+          <ManunuziTab {...{ purchases, products, accounts, savePurchase, deletePurchase: (id) => bd.deleteRow('purchases', id), productName }} />
         )}
         {tab === 'madeni' && (
-          <MadeniTab {...{ debts, addManualDebt, payDebt }} />
+          <MadeniTab {...{ debts, accounts, addManualDebt, payDebt, accountName }} />
         )}
         {tab === 'bidhaa' && (
           <BidhaaTab {...{ products, addProduct, deleteProduct: (id) => bd.deleteRow('products', id), avgBuyPrice, stockQty }} />
@@ -309,12 +335,15 @@ export default function BusinessApp({ userEmail, userId }) {
         )}
         {tab === 'matumizi' && (
           <MatumiziTab {...{
-            bizExp: biz_expenses, persExp: personal_expenses,
+            bizExp: biz_expenses, persExp: personal_expenses, accounts,
             addBiz: (row) => bd.insertRow('biz_expenses', row),
             addPers: (row) => bd.insertRow('personal_expenses', row),
             delBiz: (id) => bd.deleteRow('biz_expenses', id),
             delPers: (id) => bd.deleteRow('personal_expenses', id),
           }} />
+        )}
+        {tab === 'akaunti' && (
+          <AkauntiTab {...{ accounts, accountBalance, saveAccount, deleteAccount }} />
         )}
         {tab === 'muhtasari' && (
           <MuhtasariTab {...{ sales, purchases, bizExp: biz_expenses, persExp: personal_expenses, debts }} />
@@ -371,7 +400,7 @@ export default function BusinessApp({ userEmail, userId }) {
 }
 
 /* ---------------------------------- Dashboard ---------------------------------- */
-function Dashboard({ mauzoMwezi, faidaMwezi, madeniSasa, idadiWateja, productSummary, trend, expenseBreakdown, customerStats, insights }) {
+function Dashboard({ mauzoMwezi, faidaMwezi, madeniSasa, idadiWateja, productSummary, trend, expenseBreakdown, customerStats, insights, fedhaZilizopo }) {
   const top5 = customerStats.slice(0, 5);
   return (
     <div className="space-y-5">
@@ -383,6 +412,7 @@ function Dashboard({ mauzoMwezi, faidaMwezi, madeniSasa, idadiWateja, productSum
         <StatCard label="Madeni Yanayodaiwa" value={`${fmt(madeniSasa)} Tsh`} accent={C.brick} />
         <StatCard label="Idadi ya Wateja" value={idadiWateja} accent={C.sage} />
       </div>
+      <StatCard label="Fedha Zilizopo Kwenye Akaunti" value={`${fmt(fedhaZilizopo)} Tsh`} accent={C.sage} />
 
       {insights && insights.length > 0 && (
         <div>
@@ -477,18 +507,18 @@ function Dashboard({ mauzoMwezi, faidaMwezi, madeniSasa, idadiWateja, productSum
 }
 
 /* ---------------------------------- Mauzo ---------------------------------- */
-function MauzoTab({ sales, products, saveSale, deleteSale, productName, avgBuyPrice }) {
+function MauzoTab({ sales, products, accounts, saveSale, deleteSale, productName, avgBuyPrice }) {
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState(null);
   const blank = () => ({
     date: todayStr(), customer: '', productId: products[0]?.id || '', qty: '', sellPrice: '',
-    buyPrice: '', paymentType: 'Taslimu', newProductName: '',
+    buyPrice: '', paymentType: 'Taslimu', newProductName: '', accountId: '',
   });
   const [f, setF] = useState(blank());
 
   const openNew = () => { setF(blank()); setEditId(null); setOpen(true); };
   const openEdit = (s) => {
-    setF({ date: s.date, customer: s.customer, productId: s.product_id, qty: s.qty, sellPrice: s.sell_price, buyPrice: s.buy_price, paymentType: s.payment_type, newProductName: '' });
+    setF({ date: s.date, customer: s.customer, productId: s.product_id, qty: s.qty, sellPrice: s.sell_price, buyPrice: s.buy_price, paymentType: s.payment_type, newProductName: '', accountId: s.account_id || '' });
     setEditId(s.id); setOpen(true);
   };
   const onProductChange = (pid) => setF((v) => ({ ...v, productId: pid, buyPrice: pid !== '__new__' && avgBuyPrice(pid) ? Number(avgBuyPrice(pid)).toFixed(0) : v.buyPrice }));
@@ -532,6 +562,14 @@ function MauzoTab({ sales, products, saveSale, deleteSale, productName, avgBuyPr
               <option>Deni</option>
             </select>
           </Field>
+          {f.paymentType === 'Taslimu' && accounts.length > 0 && (
+            <Field label="Fedha Ziliingia Akaunti Gani">
+              <select style={inputStyle} value={f.accountId} onChange={(e) => setF({ ...f, accountId: e.target.value })}>
+                <option value="">— Haijachaguliwa —</option>
+                {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+            </Field>
+          )}
           <div className="text-xs pt-1 pb-2" style={{ color: C.muted }}>
             Jumla ya Mauzo: <b>{fmt(Number(f.qty || 0) * Number(f.sellPrice || 0))} Tsh</b> · Faida: <b>{fmt(Number(f.qty || 0) * Number(f.sellPrice || 0) - Number(f.qty || 0) * Number(f.buyPrice || 0))} Tsh</b>
           </div>
@@ -565,14 +603,14 @@ function MauzoTab({ sales, products, saveSale, deleteSale, productName, avgBuyPr
 }
 
 /* ---------------------------------- Manunuzi ---------------------------------- */
-function ManunuziTab({ purchases, products, savePurchase, deletePurchase, productName }) {
+function ManunuziTab({ purchases, products, accounts, savePurchase, deletePurchase, productName }) {
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState(null);
-  const blank = () => ({ date: todayStr(), productId: products[0]?.id || '', qty: '', buyPrice: '', supplier: '', notes: '', newProductName: '' });
+  const blank = () => ({ date: todayStr(), productId: products[0]?.id || '', qty: '', buyPrice: '', supplier: '', notes: '', newProductName: '', accountId: '' });
   const [f, setF] = useState(blank());
 
   const openNew = () => { setF(blank()); setEditId(null); setOpen(true); };
-  const openEdit = (p) => { setF({ date: p.date, productId: p.product_id, qty: p.qty, buyPrice: p.buy_price, supplier: p.supplier, notes: p.notes, newProductName: '' }); setEditId(p.id); setOpen(true); };
+  const openEdit = (p) => { setF({ date: p.date, productId: p.product_id, qty: p.qty, buyPrice: p.buy_price, supplier: p.supplier, notes: p.notes, newProductName: '', accountId: p.account_id || '' }); setEditId(p.id); setOpen(true); };
 
   const submit = async () => { await savePurchase(f, editId); setOpen(false); };
   const del = (id) => { if (confirm('Futa manunuzi haya?')) deletePurchase(id); };
@@ -604,6 +642,14 @@ function ManunuziTab({ purchases, products, savePurchase, deletePurchase, produc
             <Field label="Bei ya Ununuzi/kg"><input type="number" style={inputStyle} value={f.buyPrice} onChange={(e) => setF({ ...f, buyPrice: e.target.value })} /></Field>
           </div>
           <Field label="Msambazaji"><input style={inputStyle} value={f.supplier} onChange={(e) => setF({ ...f, supplier: e.target.value })} /></Field>
+          {accounts.length > 0 && (
+            <Field label="Ilipwa Kutoka Akaunti Gani">
+              <select style={inputStyle} value={f.accountId} onChange={(e) => setF({ ...f, accountId: e.target.value })}>
+                <option value="">— Haijachaguliwa —</option>
+                {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+            </Field>
+          )}
           <Field label="Maelezo"><input style={inputStyle} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></Field>
           <div className="text-xs pt-1 pb-2" style={{ color: C.muted }}>Jumla ya Gharama: <b>{fmt(Number(f.qty || 0) * Number(f.buyPrice || 0))} Tsh</b></div>
           <PrimaryBtn onClick={submit} style={{ width: '100%', justifyContent: 'center' }}><Check size={15} /> Hifadhi</PrimaryBtn>
@@ -634,10 +680,11 @@ function ManunuziTab({ purchases, products, savePurchase, deletePurchase, produc
 }
 
 /* ---------------------------------- Madeni ---------------------------------- */
-function MadeniTab({ debts, addManualDebt, payDebt }) {
+function MadeniTab({ debts, accounts, addManualDebt, payDebt, accountName }) {
   const [open, setOpen] = useState(false);
   const [payId, setPayId] = useState(null);
   const [payAmt, setPayAmt] = useState('');
+  const [payAccount, setPayAccount] = useState('');
   const blank = () => ({ date: todayStr(), customer: '', product: '', totalDebt: '', notes: '' });
   const [f, setF] = useState(blank());
 
@@ -649,8 +696,8 @@ function MadeniTab({ debts, addManualDebt, payDebt }) {
   const submitPayment = async (d) => {
     const amt = Number(payAmt);
     if (!amt || amt <= 0) return;
-    await payDebt(d, amt);
-    setPayId(null); setPayAmt('');
+    await payDebt(d, amt, payAccount);
+    setPayId(null); setPayAmt(''); setPayAccount('');
   };
 
   const sorted = [...debts].sort((a, b) => (a.status === 'Imelipwa') - (b.status === 'Imelipwa') || (b.date || '').localeCompare(a.date || ''));
@@ -693,10 +740,18 @@ function MadeniTab({ debts, addManualDebt, payDebt }) {
               </div>
               {d.status !== 'Imelipwa' && (
                 payId === d.id ? (
-                  <div className="flex gap-2 mt-2">
+                  <div className="space-y-2 mt-2">
                     <input type="number" style={inputStyle} placeholder="Kiasi kilicholipwa" value={payAmt} onChange={(e) => setPayAmt(e.target.value)} />
-                    <PrimaryBtn onClick={() => submitPayment(d)}><Check size={14} /></PrimaryBtn>
-                    <IconBtn onClick={() => { setPayId(null); setPayAmt(''); }}><X size={16} /></IconBtn>
+                    {accounts.length > 0 && (
+                      <select style={inputStyle} value={payAccount} onChange={(e) => setPayAccount(e.target.value)}>
+                        <option value="">— Fedha ziliingia akaunti gani (hiari) —</option>
+                        {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                      </select>
+                    )}
+                    <div className="flex gap-2">
+                      <PrimaryBtn onClick={() => submitPayment(d)} style={{ flex: 1, justifyContent: 'center' }}><Check size={14} /> Hifadhi Malipo</PrimaryBtn>
+                      <IconBtn onClick={() => { setPayId(null); setPayAmt(''); setPayAccount(''); }}><X size={16} /></IconBtn>
+                    </div>
                   </div>
                 ) : (
                   <button onClick={() => setPayId(d.id)} className="mt-2 text-xs font-medium" style={{ color: C.sage }}>+ Rekodi Malipo</button>
@@ -734,6 +789,91 @@ function BidhaaTab({ products, addProduct, deleteProduct, avgBuyPrice, stockQty 
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+/* ---------------------------------- Akaunti za Fedha ---------------------------------- */
+function AkauntiTab({ accounts, accountBalance, saveAccount, deleteAccount }) {
+  const [open, setOpen] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const blank = () => ({ name: '', type: 'Benki', accountNumber: '', lipaNamba: '', openingBalance: '', status: 'Active', notes: '' });
+  const [f, setF] = useState(blank());
+
+  const openNew = () => { setF(blank()); setEditId(null); setOpen(true); };
+  const openEdit = (a) => {
+    setF({ name: a.name, type: a.type, accountNumber: a.account_number || '', lipaNamba: a.lipa_namba || '', openingBalance: a.opening_balance, status: a.status, notes: a.notes || '' });
+    setEditId(a.id); setOpen(true);
+  };
+  const submit = async () => { await saveAccount(f, editId); setOpen(false); };
+  const del = (id) => { if (confirm('Futa akaunti hii? Miamala iliyounganishwa nayo haitafutwa.')) deleteAccount(id); };
+
+  const totalBalance = accounts.filter((a) => a.status !== 'Imefungwa').reduce((s, a) => s + accountBalance(a).balance, 0);
+
+  return (
+    <div className="space-y-4">
+      <SectionHeader title="Akaunti za Fedha" sub={`Jumla ya fedha zilizopo: ${fmt(totalBalance)} Tsh`} action={<PrimaryBtn onClick={openNew}><Plus size={15} /> Akaunti</PrimaryBtn>} />
+
+      {open && (
+        <div className="rounded-xl p-4 space-y-1" style={{ background: C.paper, border: `1px solid ${C.border}` }}>
+          <div className="flex justify-between items-center mb-2">
+            <div className="font-medium text-sm">{editId ? 'Hariri Akaunti' : 'Akaunti Mpya'}</div>
+            <IconBtn onClick={() => setOpen(false)}><X size={16} /></IconBtn>
+          </div>
+          <Field label="Jina la Akaunti"><input style={inputStyle} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="mf. CRDB Bank, M-Pesa" /></Field>
+          <Field label="Aina">
+            <select style={inputStyle} value={f.type} onChange={(e) => setF({ ...f, type: e.target.value })}>
+              <option>Benki</option>
+              <option>Simu</option>
+              <option>Taslimu</option>
+            </select>
+          </Field>
+          <Field label="Namba ya Akaunti (Benki)"><input style={inputStyle} value={f.accountNumber} onChange={(e) => setF({ ...f, accountNumber: e.target.value })} placeholder="mf. 0150XXXXXXX" /></Field>
+          <Field label="Lipa Namba (Simu)"><input style={inputStyle} value={f.lipaNamba} onChange={(e) => setF({ ...f, lipaNamba: e.target.value })} placeholder="mf. 400XXX" /></Field>
+          <Field label="Salio la Kuanzia (Tsh)"><input type="number" style={inputStyle} value={f.openingBalance} onChange={(e) => setF({ ...f, openingBalance: e.target.value })} /></Field>
+          <Field label="Status">
+            <select style={inputStyle} value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })}>
+              <option value="Active">Active</option>
+              <option value="Imefungwa">Imefungwa</option>
+            </select>
+          </Field>
+          <Field label="Maelezo"><input style={inputStyle} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></Field>
+          <PrimaryBtn onClick={submit} style={{ width: '100%', justifyContent: 'center' }}><Check size={15} /> Hifadhi</PrimaryBtn>
+        </div>
+      )}
+
+      {accounts.length === 0 ? <EmptyState text="Bado hakuna akaunti. Ongeza benki au namba ya simu unayotumia." /> : (
+        <div className="space-y-2">
+          {accounts.map((a) => {
+            const { balance, moneyIn, moneyOut } = accountBalance(a);
+            return (
+              <div key={a.id} className="rounded-xl p-3" style={{ background: C.paper, border: `1px solid ${C.border}` }}>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <div className="font-medium text-sm">{a.name}</div>
+                    <div className="text-xs" style={{ color: C.muted }}>
+                      {a.type}{a.account_number ? ` · Acc: ${a.account_number}` : ''}{a.lipa_namba ? ` · Lipa Namba: ${a.lipa_namba}` : ''}
+                    </div>
+                    <div className="mt-1"><Pill tone={a.status === 'Active' ? 'sage' : 'brick'}>{a.status}</Pill></div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[11px] uppercase tracking-wide" style={{ color: C.muted }}>Salio</div>
+                    <div className="font-semibold" style={{ fontVariantNumeric: 'tabular-nums', color: balance < 0 ? C.brick : C.text }}>{fmt(balance)} Tsh</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs mt-2" style={{ color: C.muted }}>
+                  <div>Fedha Zilizoingia: <b style={{ color: C.sage }}>{fmt(moneyIn)}</b></div>
+                  <div>Matumizi Yaliyotumika: <b style={{ color: C.brick }}>{fmt(moneyOut)}</b></div>
+                </div>
+                <div className="flex gap-1 justify-end mt-2">
+                  <IconBtn onClick={() => openEdit(a)}><Pencil size={14} /></IconBtn>
+                  <IconBtn tone="brick" onClick={() => del(a.id)}><Trash2 size={14} /></IconBtn>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -857,17 +997,18 @@ function WatejaTab({ customerStats, saveCustomerProfile, idadiWateja, madeniSasa
 }
 
 /* ---------------------------------- Matumizi ---------------------------------- */
-function MatumiziTab({ bizExp, persExp, addBiz, addPers, delBiz, delPers }) {
+function MatumiziTab({ bizExp, persExp, accounts, addBiz, addPers, delBiz, delPers }) {
   const [sub, setSub] = useState('biashara');
   const list = sub === 'biashara' ? bizExp : persExp;
   const [open, setOpen] = useState(false);
-  const blank = () => (sub === 'biashara' ? { date: todayStr(), type: '', description: '', amount: '' } : { date: todayStr(), description: '', amount: '' });
+  const blank = () => (sub === 'biashara' ? { date: todayStr(), type: '', description: '', amount: '', accountId: '' } : { date: todayStr(), description: '', amount: '', accountId: '' });
   const [f, setF] = useState(blank());
 
   const openNew = () => { setF(blank()); setOpen(true); };
   const submit = async () => {
     if (!f.amount) return;
-    const row = { ...f, amount: Number(f.amount) };
+    const { accountId, ...rest } = f;
+    const row = { ...rest, amount: Number(f.amount), account_id: accountId || null };
     if (sub === 'biashara') await addBiz(row); else await addPers(row);
     setOpen(false);
   };
@@ -894,6 +1035,14 @@ function MatumiziTab({ bizExp, persExp, addBiz, addPers, delBiz, delPers }) {
           {sub === 'biashara' && <Field label="Aina ya Gharama"><input style={inputStyle} value={f.type} onChange={(e) => setF({ ...f, type: e.target.value })} placeholder="mf. Nauli, Vifungashio" /></Field>}
           <Field label="Maelezo"><input style={inputStyle} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></Field>
           <Field label="Kiasi (Tsh)"><input type="number" style={inputStyle} value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} /></Field>
+          {accounts.length > 0 && (
+            <Field label="Ilipwa Kutoka Akaunti Gani">
+              <select style={inputStyle} value={f.accountId} onChange={(e) => setF({ ...f, accountId: e.target.value })}>
+                <option value="">— Haijachaguliwa —</option>
+                {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+            </Field>
+          )}
           <PrimaryBtn onClick={submit} style={{ width: '100%', justifyContent: 'center' }}><Check size={15} /> Hifadhi</PrimaryBtn>
         </div>
       )}

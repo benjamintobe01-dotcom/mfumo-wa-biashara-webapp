@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabaseClient';
 
 const TABLES = [
   'products', 'sales', 'purchases', 'biz_expenses',
-  'personal_expenses', 'debts', 'customer_profiles',
+  'personal_expenses', 'debts', 'customer_profiles', 'accounts',
 ];
 
 export function useBusinessData(userId) {
