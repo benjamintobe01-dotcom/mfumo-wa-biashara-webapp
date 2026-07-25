@@ -49,10 +49,10 @@ export default function SignupPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-6">
           <div
-            className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold mx-auto mb-2"
-            style={{ background: '#C6952E', color: '#16301F' }}
-          >K</div>
-          <h1 className="text-xl font-semibold" style={{ color: '#20201A', fontFamily: 'ui-serif, Georgia' }}>Mfumo wa Biashara</h1>
+            className="w-14 h-14 rounded-2xl overflow-hidden mx-auto mb-2"
+            style={{ background: '#C6952E' }}
+          ><img src="/icons/icon-192.png" alt="Logo" className="w-full h-full object-cover" /></div>
+          <h1 className="text-xl font-semibold" style={{ color: '#20201A', fontFamily: 'ui-serif, Georgia' }}>Brilliant Company System</h1>
           <p className="text-xs" style={{ color: '#786F5C' }}>Fungua akaunti mpya</p>
         </div>
 
