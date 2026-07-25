@@ -23,8 +23,16 @@ import {
 export default function BusinessApp({ userEmail, userId }) {
   const bd = useBusinessData(userId);
   const {
-    products, sales, purchases, biz_expenses, personal_expenses, debts, customer_profiles, accounts, loading,
-  } = bd;
+    products = [],
+    sales = [],
+    purchases = [],
+    biz_expenses = [],
+    personal_expenses = [],
+    debts = [],
+    customer_profiles = [],
+    accounts = [],
+    loading,
+  } = bd || {};
   const [tab, setTab] = useState('dashboard');
   const [moreOpen, setMoreOpen] = useState(false);
 
