@@ -11,7 +11,7 @@ const TABLES = [
 export function useBusinessData(userId) {
   const [data, setData] = useState({
     products: [], sales: [], purchases: [], biz_expenses: [],
-    personal_expenses: [], debts: [], customer_profiles: [],
+    personal_expenses: [], debts: [], customer_profiles: [], accounts: [],
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -56,16 +56,11 @@ export function useBusinessData(userId) {
     return { data: d, error };
   };
 
-const deleteRow = async (table, id) => {
-  const { error } = await supabase.from(table).delete().eq('id', id);
-  if (!error) {
-    setData((prev) => ({
-      ...prev,
-      [table]: prev?.[table]?.filter((r) => r.id !== id) ?? []
-    }));
-  }
-  return { error };
-};
+  const deleteRow = async (table, id) => {
+    const { error } = await supabase.from(table).delete().eq('id', id);
+    if (!error) setData((prev) => ({ ...prev, [table]: prev[table].filter((r) => r.id !== id) }));
+    return { error };
+  };
 
-return { ...data, loading, error, reload, insertRow, updateRow, deleteRow };
+  return { ...data, loading, error, reload, insertRow, updateRow, deleteRow };
 }
