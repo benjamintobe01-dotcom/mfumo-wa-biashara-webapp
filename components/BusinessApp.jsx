@@ -889,6 +889,9 @@ function MadeniTab({ debts, accounts, addManualDebt, payDebt, accountName }) {
 function WatejaTab({ customerStats, saveCustomerProfile, idadiWateja, madeniSasa, mauzoMwezi, mauzoMwezLiopita, insights }) {
   const [editCustomer, setEditCustomer] = useState(null);
   const [form, setForm] = useState({ phone: '', location: '', remarks: '', followUpDate: '', followUpNote: '' });
+  const [addOpen, setAddOpen] = useState(false);
+  const [newForm, setNewForm] = useState({ name: '', phone: '', location: '', remarks: '', followUpDate: '', followUpNote: '' });
+  const [addError, setAddError] = useState('');
 
   const openProfile = (c) => {
     setEditCustomer(c);
@@ -913,9 +916,51 @@ function WatejaTab({ customerStats, saveCustomerProfile, idadiWateja, madeniSasa
     setEditCustomer(null);
   };
 
+  const blankNewForm = () => ({ name: '', phone: '', location: '', remarks: '', followUpDate: '', followUpNote: '' });
+  const openAdd = () => { setNewForm(blankNewForm()); setAddError(''); setAddOpen(true); };
+  const submitNew = async () => {
+    const name = newForm.name.trim();
+    if (!name) { setAddError('Tafadhali jaza jina la mteja.'); return; }
+    const exists = customerStats.some((c) => c.name.toLowerCase() === name.toLowerCase());
+    if (exists) { setAddError('Mteja mwenye jina hili tayari yupo.'); return; }
+    await saveCustomerProfile(name, {
+      phone: newForm.phone,
+      location: newForm.location,
+      remarks: newForm.remarks,
+      follow_up_date: newForm.followUpDate,
+      follow_up_note: newForm.followUpNote,
+    });
+    setAddOpen(false);
+  };
+
   return (
     <div className="space-y-4">
-      <SectionHeader title="Wateja" sub="Uchambuzi na taarifa za wateja" />
+      <SectionHeader
+        title="Wateja"
+        sub="Uchambuzi na taarifa za wateja"
+        action={<PrimaryBtn onClick={openAdd}><Plus size={15} /> Ongeza Mteja</PrimaryBtn>}
+      />
+
+      {addOpen && (
+        <div className="rounded-xl p-4 space-y-1" style={{ background: C.paper, border: `1px solid ${C.border}` }}>
+          <div className="flex justify-between items-center mb-2">
+            <div className="font-medium text-sm">Mteja Mpya</div>
+            <IconBtn onClick={() => setAddOpen(false)}><X size={16} /></IconBtn>
+          </div>
+          <Field label="Jina la Mteja"><input style={inputStyle} value={newForm.name} onChange={(e) => setNewForm({ ...newForm, name: e.target.value })} placeholder="mf. Baraka Mushi" /></Field>
+          <Field label="Namba ya Simu"><input style={inputStyle} value={newForm.phone} onChange={(e) => setNewForm({ ...newForm, phone: e.target.value })} placeholder="mf. 0712345678" /></Field>
+          <Field label="Eneo / Anwani"><input style={inputStyle} value={newForm.location} onChange={(e) => setNewForm({ ...newForm, location: e.target.value })} placeholder="mf. Kariakoo" /></Field>
+          <Field label="Aina ya Biashara / Maelezo"><input style={inputStyle} value={newForm.remarks} onChange={(e) => setNewForm({ ...newForm, remarks: e.target.value })} placeholder="mf. Anauza rejareja" /></Field>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Tarehe ya Kufuatilia"><input type="date" style={inputStyle} value={newForm.followUpDate} onChange={(e) => setNewForm({ ...newForm, followUpDate: e.target.value })} /></Field>
+            <Field label="Kumbusho / Ujumbe"><input style={inputStyle} value={newForm.followUpNote} onChange={(e) => setNewForm({ ...newForm, followUpNote: e.target.value })} placeholder="Mpigie simu..." /></Field>
+          </div>
+          {addError && <div className="text-xs pt-1" style={{ color: C.brick }}>{addError}</div>}
+          <div className="pt-2">
+            <PrimaryBtn onClick={submitNew} style={{ width: '100%', justifyContent: 'center' }}><Check size={15} /> Hifadhi Mteja</PrimaryBtn>
+          </div>
+        </div>
+      )}
 
       {insights && insights.length > 0 && (
         <div>
